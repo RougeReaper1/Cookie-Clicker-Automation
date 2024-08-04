@@ -1,31 +1,16 @@
+import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
 
-# Function to get valid input with a default value
-def get_input(prompt, default):
+# User configuration
+def get_user_input(prompt, default_value):
     user_input = input(prompt)
-    if user_input.strip() == "":
-        return default
-    try:
-        value = float(user_input)
-        if value <= 0:
-            raise ValueError("Value must be positive.")
-        return value
-    except ValueError as e:
-        print(f"Invalid input: {e}. Using default value: {default}")
-        return default
+    return float(user_input) if user_input else default_value
 
-# Set default purchase interval
-default_purchase_interval = 15  # Default interval between purchase attempts (in seconds)
-
-# Prompt user for custom purchase interval
-purchase_interval = get_input(f"Enter the interval between purchase attempts (default {default_purchase_interval} seconds): ", default_purchase_interval)
-
-# Set the click interval for 50 CPS
-click_interval = 1 / 50  # 0.02 seconds
+click_interval = get_user_input("Enter the click interval in seconds (default 50 CPS): ", 0.02)
+purchase_interval = get_user_input("Enter the purchase interval in seconds (default 15): ", 15)
 
 # Set up the WebDriver
 driver = webdriver.Chrome()
@@ -54,41 +39,43 @@ except Exception as e:
 cookie = driver.find_element(By.ID, 'bigCookie')
 
 # Accept cookies if the button is present
-try:
-    accept_cookies = WebDriverWait(driver, 5).until(
-        EC.element_to_be_clickable((By.XPATH, '/html/body/div[1]/div/a[1]'))
-    )
-    accept_cookies.click()
-except Exception as e:
-    print(f"Error accepting cookies: {e}")
+def accept_cookies():
+    try:
+        accept_cookies_button = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, '/html/body/div[1]/div/a[1]'))
+        )
+        accept_cookies_button.click()
+    except Exception as e:
+        print(f"Error accepting cookies: {e}")
+
+accept_cookies()
 
 # Function to get the number of cookies
 def get_cookies():
-    cookies = driver.find_element(By.ID, 'cookies').text.split()[0].replace(',', '')
-    return int(cookies)
+    cookies_text = driver.find_element(By.ID, 'cookies').text.split()[0].replace(',', '')
+    return int(cookies_text)
 
 # Function to get the price of a building
 def get_building_price(building):
     try:
-        price = building.find_element(By.CSS_SELECTOR, '.price').text.replace(',', '')
-        return int(price)
+        price_text = building.find_element(By.CSS_SELECTOR, '.price').text.replace(',', '')
+        return int(price_text)
     except Exception as e:
         print(f"Error getting building price: {e}")
         return 0
 
-# Function to buy the most cost-effective building or upgrade
+# Function to buy the most expensive building or upgrade
 def buy_items():
     try:
         # Find all available upgrades
         upgrades = driver.find_elements(By.CSS_SELECTOR, '.crate.upgrade.enabled')
         if upgrades:
             print("Buying upgrade...")
-            upgrades[-1].click()  # Buy the most expensive upgrade
+            upgrades[-1].click()
             return True
 
         # Get the list of unlocked and enabled buildings
         buildings = driver.find_elements(By.CSS_SELECTOR, '.product.unlocked.enabled')
-
         if not buildings:
             print("No buildings available for purchase.")
             return False
@@ -123,10 +110,9 @@ last_purchase_time = time.time()
 try:
     while True:
         start_time = time.time()
-        # Click 50 times per second
-        while time.time() - start_time < 1:
-            cookie.click()
-            time.sleep(click_interval)
+
+        # Click the cookie
+        cookie.click()
 
         # Check for achievements and close them if they appear
         try:
@@ -141,8 +127,13 @@ try:
         # Check if enough time has passed since the last purchase
         if time.time() - last_purchase_time >= purchase_interval:
             if buy_items():
-                print(f"Purchased an item, resetting purchase timer")
-                last_purchase_time = time.time()  # Update the last purchase time
+                print("Purchased an item, resetting purchase timer")
+                last_purchase_time = time.time()
+
+        # Ensure the click interval is maintained
+        elapsed_time = time.time() - start_time
+        if elapsed_time < click_interval:
+            time.sleep(click_interval - elapsed_time)
 
 except KeyboardInterrupt:
     print("Stopping the script...")
